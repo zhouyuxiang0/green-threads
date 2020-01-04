@@ -20,28 +20,23 @@ struct ThreadContext {
 }
 
 fn print_stack(filename: &str) {
-    // let mut f = std::fs::File::create(filename).unwrap();
+    let mut f = std::fs::File::create(filename).unwrap();
     unsafe {
         for i in (0..SSIZE).rev() {
-            println!(
+            writeln!(
+                f,
                 "mem: {}, val: {}",
                 S_PTR.offset(i as isize) as usize,
                 *S_PTR.offset(i as isize)
             )
-            // writeln!(
-            //     f,
-            //     "mem: {}, val: {}",
-            //     S_PTR.offset(i as isize) as usize,
-            //     *S_PTR.offset(i as isize)
-            // )
-            // .expect("Error writing to file.");
+            .expect("Error writing to file.");
         }
     }
 }
 
 fn hello() -> ! {
     println!("new stack waking up!");
-    // print_stack("AFTER.txt");
+    print_stack("AFTER.txt");
     loop {}
 }
 
@@ -55,7 +50,7 @@ unsafe fn gt_switch(new: *const ThreadContext) {
     // : "r"(new) "r" 被称为一个 constraint（约束）。使用这些约束指导编译器决定放置输入的位置 "r" 仅表示将其放入编译器选择的通用寄存器中
     // : "alignstack" options选项，rust中的内联汇编可以设置三种选项 alignstack, volatile, intel,windows上运行需指定为 alignstack 对齐栈
     asm!("
-        mov 0x00($0), %rsp 
+        mov     0x00($0), %rsp 
         ret
         "
     :
@@ -76,8 +71,9 @@ fn main() {
     unsafe {
         // std::ptr::write 使用给定的值覆盖内存位置 而不读取或删除旧值
         // hello 已经是一个函数指针 64位系统的指针都是64位的 所以直接转为u64
+        S_PTR = stack_ptr;
         std::ptr::write(stack_ptr.offset(SSIZE - 16) as *mut u64, hello as u64);
-        // print_stack("BEFORE.txt");
+        print_stack("BEFORE.txt");
         // for i in (0..SSIZE).rev() {
         //     println!(
         //         "mem: {}, val: {}",
