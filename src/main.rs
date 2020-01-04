@@ -1,17 +1,47 @@
 // 需要使用asm!宏
 #![feature(asm)]
+#![feature(naked_functions)] // 使用裸函数特性
+use std::io::Write;
 
 // 设置栈的尺寸
-const SSIZE: isize = 48;
+const SSIZE: isize = 1024;
+static mut S_PTR: *const u8 = 0 as *const u8;
 
 #[derive(Debug, Default)]
 #[repr(C)] // 告诉编译器使用兼容C-ABI的内存布局
 struct ThreadContext {
     rsp: u64,
+    r15: u64,
+    r14: u64,
+    r13: u64,
+    r12: u64,
+    rbx: u64,
+    rbp: u64,
+}
+
+fn print_stack(filename: &str) {
+    // let mut f = std::fs::File::create(filename).unwrap();
+    unsafe {
+        for i in (0..SSIZE).rev() {
+            println!(
+                "mem: {}, val: {}",
+                S_PTR.offset(i as isize) as usize,
+                *S_PTR.offset(i as isize)
+            )
+            // writeln!(
+            //     f,
+            //     "mem: {}, val: {}",
+            //     S_PTR.offset(i as isize) as usize,
+            //     *S_PTR.offset(i as isize)
+            // )
+            // .expect("Error writing to file.");
+        }
+    }
 }
 
 fn hello() -> ! {
     println!("new stack waking up!");
+    // print_stack("AFTER.txt");
     loop {}
 }
 
@@ -32,7 +62,7 @@ unsafe fn gt_switch(new: *const ThreadContext) {
     : "r"(new)
     :
     : "alignstack"
-    )
+    );
 }
 
 fn main() {
@@ -42,13 +72,22 @@ fn main() {
     let stack_ptr = stack.as_mut_ptr();
     // 64位cpu每次只能从内存中取8个字节的数据 32位是4个字节 所以64位cpu每次只能对8的倍数的地址进行读取
     // 栈向下增长，我们的48字节栈是从索引0到47 首先内存地址必须要16字节对齐 所以索引32将是从栈末尾开始的16字节偏移量的第一个索引
+    // 为了确保栈中存放的指针在一个地址上 这个地址必须是16的倍数
     unsafe {
         // std::ptr::write 使用给定的值覆盖内存位置 而不读取或删除旧值
         // hello 已经是一个函数指针 64位系统的指针都是64位的 所以直接转为u64
-        std::ptr::write(stack_ptr.offset(SSIZE - 16) as * mut u64, hello as u64);
+        std::ptr::write(stack_ptr.offset(SSIZE - 16) as *mut u64, hello as u64);
+        // print_stack("BEFORE.txt");
+        // for i in (0..SSIZE).rev() {
+        //     println!(
+        //         "mem: {}, val: {}",
+        //         stack_ptr.offset(i as isize) as usize,
+        //         *stack_ptr.offset(i as isize)
+        //     )
+        // }
         // 将rsp栈指针设置为48-16=32的索引位置
         ctx.rsp = stack_ptr.offset(SSIZE - 16) as u64;
         // 让 CPU 跳转到我们自己的栈并在那里执行代码
-        gt_switch(&mut ctx)
+        gt_switch(&mut ctx);
     }
 }
