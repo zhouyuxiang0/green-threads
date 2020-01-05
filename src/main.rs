@@ -31,16 +31,18 @@ struct Thread {
     state: State,
 }
 
+// 4个64位通用寄存器：RAX、RBX、RCX、RDX
+// 4个64位指令寄存器：RSI、RDI、RBP、RSP
 #[derive(Debug, Default)]
 #[repr(C)]
-struct ThreadContext {
-    rsp: u64,
+struct ThreadContext {  // r 代表 register r是一种常见的多CPU架构中的前缀，其中的寄存器进行了编号
+    rsp: u64,           // 栈指针寄存器 其内存放着一个指针，该指针永远指向系统栈最上面一个栈帧的栈顶
     r15: u64,
     r14: u64,
     r13: u64,
     r12: u64,
     rbx: u64,
-    rbp: u64,
+    rbp: u64,           // 基址指针寄存器，其内存放着一个指针，该指针永远指向系统栈最上面一个栈帧的底部
 }
 
 impl Thread {
@@ -50,6 +52,32 @@ impl Thread {
             stack: vec![0_u8; DEFAULT_STACK_SIZE],
             ctx: ThreadContext::default(),
             state: State::Available,
+        }
+    }
+}
+
+impl Runtime {
+    // 初始线程，初始化为running状态
+    pub fn new() -> self {
+        let base_thread = Thread {
+            id: 0,
+            stack: vec![0_u8; DEFAULT_STACK_SIZE],
+            ctx: ThreadContext::default(),
+            state: State::Running,
+        };
+        let mut threads = vec![base_thread];
+        let mut available_threads: Vec<Thread> = (1..MAX_THREADS).map(|i| Thread::new(i)).collect();
+        threads.append(&mut available_threads);
+        Runtime {
+            threads,
+            current: 0,
+        }
+    }
+
+    pub fn init(&self) {
+        unsafe {
+            let r_ptr: *const Runtime = self;
+            RUNTIME = r_ptr as usize;
         }
     }
 }
